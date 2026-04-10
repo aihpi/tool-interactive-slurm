@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2026-04-10
+
+### Added - Setup & Access Options
+- **Run Node SSH Hosts**: Setup scripts can now generate direct `run-rx01` and `run-rx02` SSH hosts for lightweight always-on access without a Slurm job
+- **Windows Setup Path**: README now explicitly documents `setup.ps1` for Windows users and `setup.sh` for macOS/Linux users
+
+### Changed - SSH Setup Defaults
+- **CPU-Only Generated SSH Config**: Setup scripts no longer generate `slurm-gpu` or `slurm-gpu-container` SSH hosts
+- **Container Prompt Warning**: Container opt-in prompts are now marked as experimental in both setup scripts
+- **Remote Help Text**: Usage output now presents commands as `remote [command]` instead of showing the script path
+- **H100 Command Guidance**: Help text, startup hints, and README examples now document `remote h100 <1-8>`
+
+### Fixed - Shell Setup & Session UX
+- **PATH Export Duplication**: Setup scripts now check `~/.bashrc` directly before appending `export PATH="$HOME/bin:$PATH"`, and bash setup cleans older duplicate entries
+- **PowerShell PATH Quoting**: Windows setup now writes the correct remote PATH export line without malformed escaping
+- **Temporary Install Script Cleanup**: Bash setup now removes `~/install_interactive_slurm.sh` from the cluster after installation
+- **CPU Job Log Cleanup**: CPU interactive jobs now send stdout/stderr to `/dev/null` instead of creating `job.logs`
+- **Interactive Terminal Hint**: Compute-node shells now show a compact `remote` usage hint only in real interactive TTY sessions
+- **Quota Summary Display**: Startup hint can now display the cluster-provided quota summary from `~/.sci/quota-bar`
+- **H100 Input Validation**: `remote h100` now validates GPU counts and rejects values outside `1` to `8`
+
 ## [Unreleased] - 2025-11-26
 
 ### Enhanced - GPU Session Management & H100 Support
