@@ -98,6 +98,7 @@ display_slurm_options() {
     echo "📋 Available 'remote' commands:"
     echo "   • remote list       - List running vscode-remote jobs"
     echo "   • remote ssh        - SSH into the node of a running job"
+    echo "   • remote cleanup    - Remove old VSCode server installs"
     echo "   • remote gpuswap    - Switch to GPU environment"
     echo "   • remote h100 <1-8> - Reserve 1-8 H100 GPUs on aisc-shortrun partition"
     echo "   • remote exit       - Exit all jobs on aisc-interactive and aisc-shortrun partitions"
@@ -120,7 +121,7 @@ if command -v complete &>/dev/null; then
         cur="${COMP_WORDS[COMP_CWORD]}"
         prev="${COMP_WORDS[COMP_CWORD-1]}"
         
-        opts="list ssh gpuswap h100 exit help"
+        opts="list ssh cleanup gpuswap h100 exit help"
         
         if [[ ${cur} == -* ]] ; then
             COMPREPLY=( $(compgen -W "-h --help" -- ${cur}) )

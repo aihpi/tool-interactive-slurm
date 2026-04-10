@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added - Setup & Access Options
 - **Run Node SSH Hosts**: Setup scripts can now generate direct `run-rx01` and `run-rx02` SSH hosts for lightweight always-on access without a Slurm job
 - **Windows Setup Path**: README now explicitly documents `setup.ps1` for Windows users and `setup.sh` for macOS/Linux users
+- **Manual Cleanup Command**: Added `remote cleanup` to manually prune older VSCode server installs on demand
 
 ### Changed - SSH Setup Defaults
 - **CPU-Only Generated SSH Config**: Setup scripts no longer generate `slurm-gpu` or `slurm-gpu-container` SSH hosts
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **PowerShell PATH Quoting**: Windows setup now writes the correct remote PATH export line without malformed escaping
 - **Temporary Install Script Cleanup**: Bash setup now removes `~/install_interactive_slurm.sh` from the cluster after installation
 - **CPU Job Log Cleanup**: CPU interactive jobs now send stdout/stderr to `/dev/null` instead of creating `job.logs`
+- **Daily VSCode Server Cleanup**: The once-per-day background maintenance runner now prunes older `~/.vscode-server` installs and keeps the newest two versions
 - **Interactive Terminal Hint**: Compute-node shells now show a compact `remote` usage hint only in real interactive TTY sessions
 - **Quota Summary Display**: Startup hint can now display the cluster-provided quota summary from `~/.sci/quota-bar`
 - **H100 Input Validation**: `remote h100` now validates GPU counts and rejects values outside `1` to `8`

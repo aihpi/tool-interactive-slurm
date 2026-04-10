@@ -9,10 +9,13 @@ TIMEOUT=300
 
 # Auto-update configuration (lightweight, runs in background)
 UPDATE_VERSION_FILE="$HOME/.interactive-slurm.version"
+DAILY_MAINTENANCE_STAMP="$HOME/.interactive-slurm.daily"
 UPDATE_LOG="$HOME/.interactive-slurm.update.log"
 UPDATE_DIR="$HOME/.interactive-slurm-updates"
 REPO_URL="https://github.com/aihpi/interactive-slurm.git"
 UPDATE_INTERVAL=86400  # 24 hours in seconds
+VSCODE_SERVER_DIR="$HOME/.vscode-server"
+VSCODE_SERVER_KEEP_COUNT=2
 
 ####################
 # don't edit below this line
@@ -26,6 +29,7 @@ function usage ()
     list      List running vscode-remote jobs
     ssh       SSH into the node of a running job
     help      Display this message
+    cleanup   Remove old VSCode server installs and keep the newest ones
     check     Check for Interactive SLURM updates
     update    Update Interactive SLURM to latest version
 
@@ -43,27 +47,27 @@ function silent_update_check() {
         return 1
     fi
     
-    # Check if enough time has passed since last update
-    if [ -f "$UPDATE_VERSION_FILE" ]; then
-        LAST_UPDATE=$(stat -c %Y "$UPDATE_VERSION_FILE" 2>/dev/null)
-        if [ -z "$LAST_UPDATE" ]; then
+    # Check if enough time has passed since the last daily maintenance run
+    if [ -f "$DAILY_MAINTENANCE_STAMP" ]; then
+        LAST_MAINTENANCE=$(stat -c %Y "$DAILY_MAINTENANCE_STAMP" 2>/dev/null)
+        if [ -z "$LAST_MAINTENANCE" ]; then
             return 1
         fi
         
         CURRENT_TIME=$(date +%s)
-        TIME_DIFF=$((CURRENT_TIME - LAST_UPDATE))
+        TIME_DIFF=$((CURRENT_TIME - LAST_MAINTENANCE))
 
-        # Only check for updates every 24 hours
+        # Only run daily maintenance every 24 hours
         if [ $TIME_DIFF -lt $UPDATE_INTERVAL ]; then
             return 1
         fi
     fi
 
     
-    # Perform silent update in background
+    # Perform daily maintenance in background
     (
-        perform_auto_update >/dev/null 2>&1
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Silent auto-update completed" >> "$UPDATE_LOG" 2>/dev/null
+        perform_daily_maintenance >/dev/null 2>&1
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Daily maintenance completed" >> "$UPDATE_LOG" 2>/dev/null
     ) &
 }
 
@@ -115,6 +119,70 @@ function perform_auto_update() {
     fi
     
     return 1
+}
+
+function prune_old_directories() {
+    local target_dir="$1"
+    local name_pattern="$2"
+    local keep_count="$3"
+
+    if [ ! -d "$target_dir" ]; then
+        return 0
+    fi
+
+    while IFS= read -r stale_dir; do
+        [ -n "$stale_dir" ] && rm -rf "$stale_dir"
+    done < <(
+        find "$target_dir" -mindepth 1 -maxdepth 1 -type d -name "$name_pattern" -printf '%T@\t%p\n' 2>/dev/null |
+            sort -nr |
+            awk -F '\t' -v keep="$keep_count" 'NR > keep { print $2 }'
+    )
+}
+
+function cleanup_old_vscode_servers() {
+    prune_old_directories "$VSCODE_SERVER_DIR/bin" "*" "$VSCODE_SERVER_KEEP_COUNT"
+    prune_old_directories "$VSCODE_SERVER_DIR/cli/servers" "Stable-*" "$VSCODE_SERVER_KEEP_COUNT"
+}
+
+function count_matching_directories() {
+    local target_dir="$1"
+    local name_pattern="$2"
+
+    if [ ! -d "$target_dir" ]; then
+        echo 0
+        return 0
+    fi
+
+    find "$target_dir" -mindepth 1 -maxdepth 1 -type d -name "$name_pattern" 2>/dev/null | wc -l | tr -d ' '
+}
+
+function perform_daily_maintenance() {
+    perform_auto_update || true
+    cleanup_old_vscode_servers || true
+    touch "$DAILY_MAINTENANCE_STAMP" 2>/dev/null || true
+}
+
+function cleanup_vscode_servers() {
+    local before_bin
+    local before_cli
+    local after_bin
+    local after_cli
+    local removed_count
+
+    echo "🧹 Cleaning up old VSCode server installs..."
+
+    before_bin=$(count_matching_directories "$VSCODE_SERVER_DIR/bin" "*")
+    before_cli=$(count_matching_directories "$VSCODE_SERVER_DIR/cli/servers" "Stable-*")
+
+    cleanup_old_vscode_servers || return 1
+
+    after_bin=$(count_matching_directories "$VSCODE_SERVER_DIR/bin" "*")
+    after_cli=$(count_matching_directories "$VSCODE_SERVER_DIR/cli/servers" "Stable-*")
+    removed_count=$(( (before_bin - after_bin) + (before_cli - after_cli) ))
+
+    echo "✅ VSCode server cleanup completed"
+    echo "   Kept newest $VSCODE_SERVER_KEEP_COUNT versions in ~/.vscode-server"
+    echo "   Removed $removed_count old install(s)"
 }
 
 function check_for_updates() {
@@ -525,6 +593,7 @@ if [ ! -z "$1" ]; then
     shift
     case $COMMAND in
         list)   list_jobs ;;
+        cleanup) cleanup_vscode_servers ;;
         cancel) cancel ;;
         ssh)    ssh_connect ;;
         cpu)    JOB_NAME=$JOB_NAME-cpu; SBATCH_PARAM=$SBATCH_PARAM_CPU; connect "$@" ;;
