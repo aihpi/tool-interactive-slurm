@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set your Slurm parameters for CPU jobs here
-SBATCH_PARAM_CPU="-o job.logs -t 8:00:00 -p aisc-interactive --account aisc --exclude=ga03 --mem=32GB --cpus-per-task=4 --export=ALL"
+SBATCH_PARAM_CPU="-o /dev/null -e /dev/null -t 8:00:00 -p aisc-interactive --account aisc --exclude=ga03 --mem=32GB --cpus-per-task=4 --export=ALL"
 
 # The time you expect a job to start in (seconds)
 # If a job doesn't start within this time, the script will exit and cancel the pending job
@@ -20,7 +20,7 @@ UPDATE_INTERVAL=86400  # 24 hours in seconds
 
 function usage ()
 {
-    echo "Usage :  $0 [command]
+    echo "Usage: remote [command]
 
     General commands:
     list      List running vscode-remote jobs
@@ -32,7 +32,7 @@ function usage ()
     Job commands:
     cpu [path]       Connect to a CPU node, optionally specifying a container image path
     gpuswap          Swap to A30 GPU environment with salloc reservation
-    h100 [count]     Reserve H100 GPUs on aisc-shortrun partition (default: 1)
+    h100 [1-8] [path] Reserve 1-8 H100 GPUs on aisc-shortrun partition (default: 1)
     "
 }
 
@@ -378,7 +378,7 @@ function gpuswap () {
 
 function h100 () {
     # H100 GPU Command - Reserve H100 on aisc-shortrun partition
-    # Support: h100 [gpu_count] [container_path]
+    # Support: h100 [1-8] [container_path]
     
     # Parse arguments
     GPU_COUNT=1
@@ -405,6 +405,12 @@ function h100 () {
         shift
         shift
         OTHER_ARGS="$@"
+    fi
+
+    if ! [[ "$GPU_COUNT" =~ ^[1-8]$ ]]; then
+        echo "Error: H100 GPU count must be an integer from 1 to 8." >&2
+        echo "Usage: remote h100 [1-8] [container_path]" >&2
+        return 1
     fi
 
     echo "🚀 Starting H100 session reservation..."
@@ -500,7 +506,7 @@ function connect () {
     echo "🖥️  Welcome to the CPU environment!"
     echo "📋 Available commands:"
     echo "   • 'remote gpuswap' - Switch to GPU environment"
-    echo "   • 'remote h100'    - Reserve H100 GPU on aisc-shortrun partition"
+    echo "   • 'remote h100 N'  - Reserve 1-8 H100 GPUs on aisc-shortrun partition"
     echo "   • 'remote exit'  - Cancel all interactive sessions"
     echo ""
     if [ -n "$CONTAINER_IMAGE_PATH" ]; then

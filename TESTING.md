@@ -175,7 +175,6 @@ Setup Phase:
 
 Connection Tests:
 [ ] ssh slurm-cpu: ______________________
-[ ] ssh slurm-gpu: ______________________
 [ ] VSCode connection: __________________
 
 Job Management:

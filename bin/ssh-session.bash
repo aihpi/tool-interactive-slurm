@@ -99,13 +99,13 @@ display_slurm_options() {
     echo "   • remote list       - List running vscode-remote jobs"
     echo "   • remote ssh        - SSH into the node of a running job"
     echo "   • remote gpuswap    - Switch to GPU environment"
-    echo "   • remote h100       - Reserve H100 GPU on aisc-shortrun partition"
+    echo "   • remote h100 <1-8> - Reserve 1-8 H100 GPUs on aisc-shortrun partition"
     echo "   • remote exit       - Exit all jobs on aisc-interactive and aisc-shortrun partitions"
     echo "   • remote help       - Display full usage information"
     echo ""
     echo "💡 For GPU development:"
     echo "   • remote gpuswap    - Switch to GPU environment with salloc"
-    echo "   • remote h100       - Reserve H100 GPU on aisc-shortrun partition"
+    echo "   • remote h100 <1-8> - Reserve 1-8 H100 GPUs on aisc-shortrun partition"
     echo ""
     echo "💡 To return to local environment:"
     echo "   • remote exit       - Exit all interactive sessions completely"
@@ -140,6 +140,38 @@ EOF
 else
   echo "ℹ️ Remote alias configuration already present"
 fi
+
+# Add or refresh a lightweight login hint for interactive shells
+REMOTE_HINT_MARKER="# >>> Remote Login Hint (auto-added) <<<"
+if grep -Fxq "$REMOTE_HINT_MARKER" "$HOME/.bashrc"; then
+  sed -i "/# >>> Remote Login Hint (auto-added) <<</,/# <<< Remote Login Hint (auto-added) >>>/d" "$HOME/.bashrc" 2>/dev/null || true
+fi
+
+cat >> "$HOME/.bashrc" <<'EOF'
+
+# >>> Remote Login Hint (auto-added) <<<
+REMOTE_HINT_SCRIPT="${HOME}/bin/start-ssh-job.bash"
+if [[ $- == *i* ]] && [[ -t 0 ]] && [[ -t 1 ]] && [[ -f "$REMOTE_HINT_SCRIPT" ]] && [[ -z "${INTERACTIVE_SLURM_HINT_SHOWN:-}" ]]; then
+    export INTERACTIVE_SLURM_HINT_SHOWN=1
+    QUOTA_BAR_FILE="${HOME}/.sci/quota-bar"
+    if [[ -f "$QUOTA_BAR_FILE" ]]; then
+        quota_bar=$(sed -n 's/^bar=//p' "$QUOTA_BAR_FILE" | head -n1)
+        quota_usage=$(sed -n 's/^usage=//p' "$QUOTA_BAR_FILE" | head -n1)
+        quota_limit=$(sed -n 's/^quota=//p' "$QUOTA_BAR_FILE" | head -n1)
+        quota_usage=${quota_usage//\\ / }
+        quota_limit=${quota_limit//\\ / }
+        if [[ -n "$quota_bar" || -n "$quota_usage" || -n "$quota_limit" ]]; then
+            printf "💾  Quota: %b  %s / %s\n" "$quota_bar" "$quota_usage" "$quota_limit"
+        fi
+    fi
+    echo "ℹ️  Interactive SLURM commands are available via 'remote'."
+    echo "   Try 'remote help', 'remote list', 'remote gpuswap', 'remote h100 2', or 'remote exit'."
+    echo ""
+fi
+# <<< Remote Login Hint (auto-added) >>>
+EOF
+
+echo "✅ Remote login hint configured in ~/.bashrc"
 
 # Display remote options when entering the environment
 if [ "$USE_CONTAINER" = true ]; then
@@ -197,4 +229,3 @@ else
     # Start SSH daemon directly on the compute node
     exec $sshd_cmd -D -p $1 -f /dev/null -h "$HOME/.ssh/vscode-remote-hostkey"
 fi
-

@@ -6,14 +6,24 @@ A streamlined solution for running interactive SSH sessions on SLURM compute nod
 
 ## 🚀 Quick Start
 
-### Setup (One Command)
+### Setup
+**macOS / Linux**
 ```bash
 git clone https://github.com/aihpi/interactive-slurm.git
 cd interactive-slurm
 ./setup.sh
 ```
 
-The setup script automatically:
+**Windows (PowerShell)**
+```powershell
+git clone https://github.com/aihpi/interactive-slurm.git
+cd interactive-slurm
+.\setup.ps1
+```
+
+Use `setup.sh` on macOS/Linux and `setup.ps1` on Windows.
+
+The setup scripts automatically:
 - ✅ Generates SSH keys and configures access
 - ✅ Installs scripts on your HPC cluster
 - ✅ Sets up VSCode integration
@@ -71,7 +81,7 @@ remote gpuswap
 # Reserve H100 GPUs (default: 1 GPU)
 remote h100
 
-# Reserve multiple H100 GPUs
+# Reserve multiple H100 GPUs (1-8)
 remote h100 4
 
 # Use H100 with container image

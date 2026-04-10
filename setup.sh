@@ -164,10 +164,22 @@ get_hpc_config() {
     
     prompt_with_default "HPC Login Node (hostname or IP)" "10.130.0.6" "HPC_LOGIN"
     prompt_with_default "Your username on the HPC cluster" "john.doe" "HPC_USERNAME"
+    prompt_yes_no "Generate direct SSH hosts for Run Nodes?" "y" "ENABLE_RUN_NODES"
+    
+    if [ "$ENABLE_RUN_NODES" = true ]; then
+        prompt_with_default "Run Node 1 hostname" "rx01.hpc.sci.hpi.de" "RUN_NODE_1"
+        prompt_with_default "Run Node 2 hostname" "rx02.hpc.sci.hpi.de" "RUN_NODE_2"
+    else
+        RUN_NODE_1=""
+        RUN_NODE_2=""
+    fi
     
     print_info "Configuration set:"
     print_info "  Login Node: $HPC_LOGIN"
     print_info "  Username: $HPC_USERNAME"
+    if [ "$ENABLE_RUN_NODES" = true ]; then
+        print_info "  Run Nodes: $RUN_NODE_1, $RUN_NODE_2"
+    fi
 }
 
 # Copy SSH key to HPC
@@ -195,7 +207,7 @@ copy_ssh_key_to_hpc() {
 setup_containers() {
     print_header "Container Configuration"
     
-    prompt_yes_no "Do you want to use containers?" "y" "USE_CONTAINERS"
+    prompt_yes_no "Do you want to use containers? (experimental)" "y" "USE_CONTAINERS"
     
     if [ "$USE_CONTAINERS" = true ]; then
         echo
@@ -242,8 +254,17 @@ install_hpc_scripts() {
 # Create bin directory
 mkdir -p ~/bin
 
-# Add bin to PATH if not already there
-if ! echo "$PATH" | grep -q "$HOME/bin"; then
+# Add bin to PATH in ~/.bashrc if not already there, and clean duplicates from prior installs
+if [ -f ~/.bashrc ]; then
+    awk '
+        $0 == "export PATH=\"$HOME/bin:$PATH\"" {
+            if (seen_path_line++) next
+        }
+        { print }
+    ' ~/.bashrc > ~/.bashrc.interactive-slurm.tmp && mv ~/.bashrc.interactive-slurm.tmp ~/.bashrc
+fi
+
+if ! grep -Fqx 'export PATH="$HOME/bin:$PATH"' ~/.bashrc 2>/dev/null; then
     echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
     echo "Added ~/bin to PATH in ~/.bashrc"
 fi
@@ -259,7 +280,12 @@ EOF
     scp -i "$SSH_KEY_PATH" bin/* "$HPC_USERNAME@$HPC_LOGIN:~/bin/"
     
     print_info "Running installation on HPC..."
-    ssh -i "$SSH_KEY_PATH" "$HPC_USERNAME@$HPC_LOGIN" "chmod +x ~/install_interactive_slurm.sh && bash ~/install_interactive_slurm.sh && chmod +x ~/bin/*.bash ~/bin/*.sh && chmod +x ~/bin/start-ssh-job.bash ~/bin/ssh-session.bash ~/bin/incontainer-setup.sh"
+    if ssh -i "$SSH_KEY_PATH" "$HPC_USERNAME@$HPC_LOGIN" "chmod +x ~/install_interactive_slurm.sh && bash ~/install_interactive_slurm.sh && chmod +x ~/bin/*.bash ~/bin/*.sh && chmod +x ~/bin/start-ssh-job.bash ~/bin/ssh-session.bash ~/bin/incontainer-setup.sh"; then
+        ssh -i "$SSH_KEY_PATH" "$HPC_USERNAME@$HPC_LOGIN" "rm -f ~/install_interactive_slurm.sh" >/dev/null 2>&1 || true
+    else
+        ssh -i "$SSH_KEY_PATH" "$HPC_USERNAME@$HPC_LOGIN" "rm -f ~/install_interactive_slurm.sh" >/dev/null 2>&1 || true
+        exit 1
+    fi
     
     print_info "Verifying script permissions..."
     ssh -i "$SSH_KEY_PATH" "$HPC_USERNAME@$HPC_LOGIN" "ls -la ~/bin/*.bash ~/bin/*.sh | head -5"
@@ -349,16 +375,29 @@ Host slurm-cpu
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
-Host slurm-gpu
-    HostName $HPC_LOGIN
+EOF
+
+    if [ "$ENABLE_RUN_NODES" = true ]; then
+        cat >> "$SSH_CONFIG_FILE" << EOF
+# Direct run node access (no Slurm job required)
+Host run-rx01
+    HostName $RUN_NODE_1
     User $HPC_USERNAME
     IdentityFile $SSH_KEY_PATH
     ConnectTimeout 60
-    ProxyCommand ssh $HPC_LOGIN -l $HPC_USERNAME -i $SSH_KEY_PATH "bash ~/bin/start-ssh-job.bash gpu"
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host run-rx02
+    HostName $RUN_NODE_2
+    User $HPC_USERNAME
+    IdentityFile $SSH_KEY_PATH
+    ConnectTimeout 60
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 EOF
+    fi
 
     # Add container configs if containers are used
     if [ "$USE_CONTAINERS" = true ]; then
@@ -373,15 +412,6 @@ Host slurm-cpu-container
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
-Host slurm-gpu-container
-    HostName $HPC_LOGIN
-    User $HPC_USERNAME
-    IdentityFile $SSH_KEY_PATH
-    ConnectTimeout 60
-    ProxyCommand ssh $HPC_LOGIN -l $HPC_USERNAME -i $SSH_KEY_PATH "bash ~/bin/start-ssh-job.bash gpu $CONTAINER_LOCAL_PATH"
-    StrictHostKeyChecking no
-    UserKnownHostsFile /dev/null
-
 EOF
     fi
     
@@ -393,11 +423,13 @@ EOF
     print_success "SSH configuration generated"
     print_info "Available SSH hosts:"
     print_info "  • ssh slurm-cpu    (CPU job, direct access)"
-    print_info "  • ssh slurm-gpu    (GPU job, direct access)"
+    if [ "$ENABLE_RUN_NODES" = true ]; then
+        print_info "  • ssh run-rx01     (Run node access, no Slurm job)"
+        print_info "  • ssh run-rx02     (Run node access, no Slurm job)"
+    fi
     
     if [ "$USE_CONTAINERS" = true ]; then
         print_info "  • ssh slurm-cpu-container (CPU job with container)"
-        print_info "  • ssh slurm-gpu-container (GPU job with container)"
     fi
 }
 
@@ -471,7 +503,7 @@ print('VSCode settings updated successfully')
     print_info "VSCode Remote-SSH Extension:"
     print_info "  1. Install the 'Remote - SSH' extension from the marketplace"
     print_info "  2. Use Ctrl/Cmd+Shift+P and search 'Remote-SSH: Connect to Host'"
-    print_info "  3. Select one of your configured hosts (slurm-cpu, slurm-gpu, etc.)"
+    print_info "  3. Select one of your configured hosts (slurm-cpu, run-rx01, run-rx02, etc.)"
 }
 
 # Test connection
@@ -560,16 +592,21 @@ print_info "  1. Open VSCode and install the Remote-SSH extension"
 print_info "  2. Press Ctrl/Cmd+Shift+P → 'Remote-SSH: Connect to Host'"
 print_info "  3. Choose from your configured hosts:"
 print_info "     • slurm-cpu (CPU job, direct access)"
-print_info "     • slurm-gpu (GPU job, direct access)"
+if [ "$ENABLE_RUN_NODES" = true ]; then
+    print_info "     • run-rx01 (Run node access, no Slurm job)"
+    print_info "     • run-rx02 (Run node access, no Slurm job)"
+fi
 if [ "$USE_CONTAINERS" = true ]; then
     print_info "     • slurm-cpu-container (CPU job with container)"
-    print_info "     • slurm-gpu-container (GPU job with container)"
 fi
 
 echo
 print_info "Command line usage:"
 print_info "  ssh slurm-cpu    # Connect to CPU job"
-print_info "  ssh slurm-gpu    # Connect to GPU job"
+if [ "$ENABLE_RUN_NODES" = true ]; then
+    print_info "  ssh run-rx01     # Connect directly to Run Node 1"
+    print_info "  ssh run-rx02     # Connect directly to Run Node 2"
+fi
 
 echo
 print_info "For troubleshooting, run these commands on the HPC cluster:"
