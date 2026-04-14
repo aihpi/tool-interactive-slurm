@@ -118,7 +118,7 @@ function Setup-SSHKey {
     Print-Info "Generating SSH key at $($script:SSHKeyPath)"
     $dateStamp = Get-Date -Format "yyyyMMdd"
     # Empty string passphrase: PowerShell needs @() trick or just pass empty string directly
-    ssh-keygen -t ed25519 -f $script:SSHKeyPath -N "" -C "interactive-slurm-$dateStamp"
+    ssh-keygen -t ed25519 -f $script:SSHKeyPath -N '""' -C "interactive-slurm-$dateStamp"
 
     if ($LASTEXITCODE -eq 0) {
         Print-Success "SSH key generated successfully"
