@@ -255,8 +255,8 @@ function Install-HPCScripts {
         scp -i $script:SSHKeyPath $file.FullName "$($script:HPCUsername)@$($script:HPCLogin):~/bin/$($file.Name)"
     }
 
-    Print-Info "Setting script permissions..."
-    ssh -i $script:SSHKeyPath "$($script:HPCUsername)@$($script:HPCLogin)" "chmod +x ~/bin/*.bash ~/bin/*.sh 2>/dev/null; chmod +x ~/bin/start-ssh-job.bash ~/bin/ssh-session.bash ~/bin/incontainer-setup.sh 2>/dev/null"
+    Print-Info "Fixing line endings and setting script permissions..."
+    ssh -i $script:SSHKeyPath "$($script:HPCUsername)@$($script:HPCLogin)" "sed -i 's/\r$//' ~/bin/*.bash ~/bin/*.sh 2>/dev/null; chmod +x ~/bin/*.bash ~/bin/*.sh 2>/dev/null"
 
     Print-Info "Verifying script permissions..."
     ssh -i $script:SSHKeyPath "$($script:HPCUsername)@$($script:HPCLogin)" "ls -la ~/bin/*.bash ~/bin/*.sh 2>/dev/null | head -5"

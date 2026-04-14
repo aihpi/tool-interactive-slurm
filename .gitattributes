@@ -1,0 +1,6 @@
+# Keep shell scripts with LF line endings on all platforms
+bin/*.bash text eol=lf
+bin/*.sh text eol=lf
+
+# PowerShell scripts can use CRLF
+*.ps1 text eol=crlf
