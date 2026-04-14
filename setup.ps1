@@ -237,13 +237,7 @@ function Install-HPCScripts {
 
     # Create bin directory and add to PATH on HPC
     Print-Info "Creating ~/bin on HPC..."
-    $pathExportLine = 'export PATH="$HOME/bin:$PATH"'
-    ssh -i $script:SSHKeyPath "$($script:HPCUsername)@$($script:HPCLogin)" @"
-mkdir -p ~/bin
-if ! grep -Fqx '$pathExportLine' ~/.bashrc 2>/dev/null; then
-    echo '$pathExportLine' >> ~/.bashrc
-fi
-"@
+    ssh -i $script:SSHKeyPath "$($script:HPCUsername)@$($script:HPCLogin)" 'mkdir -p ~/bin; grep -Fqx ''export PATH="$HOME/bin:$PATH"'' ~/.bashrc 2>/dev/null || echo ''export PATH="$HOME/bin:$PATH"'' >> ~/.bashrc'
 
     # Copy scripts from bin/ directory
     Print-Info "Copying interactive-slurm scripts..."
@@ -502,13 +496,14 @@ function Test-HPCConnection {
             }
 
             Print-Info "Testing required tools on cluster..."
-            ssh -i $script:SSHKeyPath -o ConnectTimeout=10 "$($script:HPCUsername)@$($script:HPCLogin)" @"
-echo 'Testing tools on HPC cluster:'
-command -v nc >/dev/null && echo '[OK] netcat (nc) available' || echo '[MISSING] netcat (nc) missing'
-command -v sshd >/dev/null && echo '[OK] sshd available' || echo '[MISSING] sshd missing'
-command -v enroot >/dev/null && echo '[OK] enroot available' || echo '[WARN] enroot missing (only needed for containers)'
-ls ~/bin/start-ssh-job.bash >/dev/null 2>&1 && echo '[OK] interactive-slurm scripts installed' || echo '[MISSING] scripts not found'
-"@
+            $testCmd = @(
+                "echo 'Testing tools on HPC cluster:'"
+                "command -v nc >/dev/null && echo '[OK] netcat (nc) available' || echo '[MISSING] netcat (nc) missing'"
+                "command -v sshd >/dev/null && echo '[OK] sshd available' || echo '[MISSING] sshd missing'"
+                "command -v enroot >/dev/null && echo '[OK] enroot available' || echo '[WARN] enroot missing (only needed for containers)'"
+                "ls ~/bin/start-ssh-job.bash >/dev/null 2>&1 && echo '[OK] interactive-slurm scripts installed' || echo '[MISSING] scripts not found'"
+            ) -join "; "
+            ssh -i $script:SSHKeyPath -o ConnectTimeout=10 "$($script:HPCUsername)@$($script:HPCLogin)" $testCmd
         }
         else {
             Print-Error "SSH connection test failed"
